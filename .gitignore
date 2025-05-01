@@ -1,0 +1,42 @@
+# Python cache and virtualenv
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+env/
+venv/
+
+# VSCode settings
+.vscode/
+
+# Logs and runtime junk
+*.log
+logs/
+temp/
+*.tmp
+
+# Output folders (skip generated results and intermediate files)
+input/
+translated-output/
+built-srt/
+
+# Whisper models (don't commit large AI models)
+model/
+
+# Archive files
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# OS-specific cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE metadata
+.idea/
+*.iml
+*.sublime-workspace
+*.sublime-project
+*.zip
