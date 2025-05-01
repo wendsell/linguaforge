@@ -1,30 +1,53 @@
+# LinguaForge
 
-# 🧠 LinguaForge
+**LinguaForge** is a desktop tool that automatically transcribes and translates videos into subtitle files (SRT), then muxes them into the original video. It’s designed to work offline using OpenAI Whisper, FFmpeg, and MKVToolNix — fully GPU-accelerated and optimized for AMD Vulkan-based systems (like the RX 7900 XT).
 
-**LinguaForge** is a local video translator and subtitle muxing tool that uses Whisper (via Vulkan GPU acceleration) to automatically transcribe and translate foreign-language videos into English, clean their audio, and output final MKV files with embedded subtitles.
+## Features
 
-## 🚀 Features
+- 🎥 Drag-and-drop or batch load videos
+- 🧼 Optional audio cleanup (via FFmpeg)
+- 🌍 Auto language detection and translation to English
+- 📜 Subtitle generation in `.srt` format
+- 🧠 GPU-accelerated Whisper translation (via Vulkan)
+- 🎞️ Mux subtitles directly into `.mkv` files
+- 🗂️ Organized folder structure for input/output/logs
+- 🔑 DeepL API key support to translate filenames (not content)
+- 📉 Real-time logs and progress bar during processing
+- ❌ Cancel button to stop processing queue
+- ✅ Automatic cleanup of temp files
+- 🔒 Saved config with masked API key
 
-- 🔊 Automatic audio cleanup using FFmpeg (loudnorm)
-- 🌍 Multilingual transcription and translation with whisper.cpp (ggml-medium.bin)
-- 💨 GPU acceleration via Vulkan (Radeon and AMD-friendly)
-- 🧹 Filename and folder sanitization (Unicode-safe)
-- 📄 Subtitle generation in `.srt` format with smooth pacing (ideal for spoken/ASMR content)
-- 🎥 Subtitle muxing into MKV using mkvmerge
-- 📁 Drag-and-drop GUI with queue, per-file logs, and progress indicators
-- 🔒 DeepL API key management (hidden after saving)
-- 🛑 Stop button for mid-queue cancellation
-- 💾 Local-only, offline-capable (no cloud dependencies)
+## Folder Structure
 
-## 📦 How It Works
+```plaintext
+bin/                # whisper-cli, ffmpeg, mkvmerge, etc.
+built-srt/          # temporary subtitles
+engine/             # core processor and helpers
+input/              # put your source videos here
+logs/               # logs per run
+model/              # your whisper model (.bin)
+temp/               # audio/intermediate files
+translated-output/  # final videos with embedded subtitles
+theme/              # UI styling
+LinguaForge.py      # main script
+```
 
-1. Drop in one or more video files into the GUI.
-2. The app cleans the audio and converts it to mono 16KHz WAV.
-3. It passes the audio through Whisper CLI with translation enabled.
-4. It muxes the resulting `.srt` into an MKV using mkvmerge.
-5. Clean folders remain — logs, translated MKVs, and nothing else.
+## Requirements
+- Python 3.10 or newer
+- Vulkan-compatible GPU (AMD RDNA2/3 or NVIDIA)
+- FFmpeg, MKVToolNix, and whisper-cli in the `bin` folder
 
-## 📄 License
+Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
-LinguaForge is licensed under the [GNU General Public License v3.0](LICENSE).  
-See [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) for attributions.
+## License
+This project is licensed under the [GNU GPLv3 License](LICENSE).
+
+## Attribution
+See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for included tools and their licenses.
+
+---
+
+**Made for local nerds who want subtitles done fast, clean, and offline.**
