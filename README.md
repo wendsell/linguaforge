@@ -4,18 +4,13 @@
 
 ## Features
 
-- 🎥 Drag-and-drop or batch load videos
+- 🎥 Batch load videos
 - 🧼 Optional audio cleanup (via FFmpeg)
 - 🌍 Auto language detection and translation to English
 - 📜 Subtitle generation in `.srt` format
 - 🧠 GPU-accelerated Whisper translation (via Vulkan)
 - 🎞️ Mux subtitles directly into `.mkv` files
-- 🗂️ Organized folder structure for input/output/logs
-- 🔑 DeepL API key support to translate filenames (not content)
-- 📉 Real-time logs and progress bar during processing
-- ❌ Cancel button to stop processing queue
-- ✅ Automatic cleanup of temp files
-- 🔒 Saved config with masked API key
+- 
 
 ## Folder Structure
 
