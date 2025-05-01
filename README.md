@@ -1,4 +1,5 @@
 # LinguaForge
+![LinguaForge Banner](banner.png)
 
 **LinguaForge** is a desktop tool that automatically transcribes and translates videos into subtitle files (SRT), then muxes them into the original video. It’s designed to work offline using OpenAI Whisper, FFmpeg, and MKVToolNix — fully GPU-accelerated and optimized for AMD Vulkan-based systems (like the RX 7900 XT).
 
@@ -10,7 +11,7 @@
 - 📜 Subtitle generation in `.srt` format
 - 🧠 GPU-accelerated Whisper translation (via Vulkan)
 - 🎞️ Mux subtitles directly into `.mkv` files
-- 
+
 
 ## Folder Structure
 
