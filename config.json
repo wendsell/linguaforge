@@ -1,1 +1,4 @@
-{"deepl_api_key": "1038e798-c105-4d01-8a96-64cf610a9f43:fx", "enable_audio_cleanup": false, "translate_filenames": true, "deepL_api_key": "1038e798-c105-4d01-8a96-64cf610a9f43:fx", "cleanup_enabled": true}
+{
+  "deepl_api_key": "",
+  "audio_cleanup": 1
+}

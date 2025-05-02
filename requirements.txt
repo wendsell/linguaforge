@@ -1,1 +1,4 @@
-ttkthemes
+customtkinter
+tkinterdnd2
+requests
+PyInstaller 

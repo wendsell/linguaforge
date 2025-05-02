@@ -7,13 +7,19 @@ import shutil
 from engine.core import get_paths_for_video, FOLDERS
 from engine.logger import open_log
 
-def run_command(cmd, desc, log_fn, status_fn=None, progress_fn=None):
+def run_command(cmd, desc, log_fn, status_fn=None, progress_fn=None, stop_check=None, proc_ref_callback=None):
     log_fn("\n▶ " + desc)
     if status_fn:
         status_fn(desc)
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if proc_ref_callback:
+            proc_ref_callback(proc)
         while True:
+            if stop_check and stop_check():
+                proc.terminate()
+                log_fn("⚠️ Cancelled during: " + desc)
+                return False
             line = proc.stdout.readline()
             if not line:
                 break
@@ -33,7 +39,7 @@ def find_latest_srt():
         return None
     return max(srts, key=os.path.getmtime)
 
-def process_file(video_path, config, log_fn, status_fn, progress_fn):
+def process_file(video_path, cleanup, api_key, status_fn, progress_fn, log_fn, stop_check=None, proc_ref_callback=None):
     from os.path import join, exists
     paths = get_paths_for_video(video_path)
     os.makedirs(FOLDERS["temp"], exist_ok=True)
@@ -52,11 +58,11 @@ def process_file(video_path, config, log_fn, status_fn, progress_fn):
 
         # Extract or clean audio
         progress_fn(10, "Extracting audio...")
-        if config.get("cleanup_enabled"):
+        if cleanup:
             cmd = [ffmpeg, "-y", "-i", video_path, "-af", "loudnorm", "-ar", "16000", "-ac", "1", paths["wav"]]
         else:
             cmd = [ffmpeg, "-y", "-i", video_path, "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", paths["wav"]]
-        if not run_command(cmd, "Preparing audio", logall, status_fn, progress_fn):
+        if not run_command(cmd, "Preparing audio", logall, status_fn, progress_fn, stop_check, proc_ref_callback):
             return
 
         # Whisper translation with natural flowing segments
@@ -77,7 +83,7 @@ def process_file(video_path, config, log_fn, status_fn, progress_fn):
             "--best-of", "5",
             "--max-len", "64"
         ]
-        if not run_command(whisper_cmd, "Translating via Whisper", logall, status_fn, progress_fn):
+        if not run_command(whisper_cmd, "Translating via Whisper", logall, status_fn, progress_fn, stop_check, proc_ref_callback):
             return
 
         # Mux subtitles
@@ -91,7 +97,7 @@ def process_file(video_path, config, log_fn, status_fn, progress_fn):
             mkvmerge, "-o", paths["output"], video_path,
             "--language", "0:eng", srt_path
         ]
-        if not run_command(mux_cmd, "Muxing subtitles", logall, status_fn, progress_fn):
+        if not run_command(mux_cmd, "Muxing subtitles", logall, status_fn, progress_fn, stop_check, proc_ref_callback):
             return
 
         progress_fn(100, "✅ Complete!")
