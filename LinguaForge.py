@@ -1,13 +1,14 @@
 import customtkinter as ctk
 import os
 import json
-import threading
 from tkinter import filedialog
+
 from engine.processor import process_file
 from engine.logger import open_log
-from engine.deepl_translate import translate_filename
-from dialogs.preferences import open_preferences_dialog
-from dialogs.advanced import open_advanced_processing
+from ui.file_list import FileListManager
+from dialogs.preferences import PreferencesDialog
+from dialogs.advanced import AdvancedProcessingDialog
+from core.queue_runner import QueueRunner
 
 CONFIG_FILE = "config.json"
 DEFAULT_CONFIG = {
@@ -18,10 +19,6 @@ DEFAULT_CONFIG = {
     "window_width": 920,
     "window_height": 820
 }
-
-ATTRIBUTIONS = [
-    "Heroicons (MIT License) — https://heroicons.com"
-]
 
 def load_config():
     if not os.path.exists(CONFIG_FILE):
@@ -39,12 +36,10 @@ for key in DEFAULT_CONFIG:
         config[key] = DEFAULT_CONFIG[key]
 
 ctk.set_appearance_mode(config["theme"])
-app_width = config.get("window_width", 920)
-app_height = config.get("window_height", 820)
 ctk.set_default_color_theme("blue")
 
 app = ctk.CTk()
-app.geometry(f"{app_width}x{app_height}")
+app.geometry(f"{config['window_width']}x{config['window_height']}")
 app.resizable(False, False)
 status_text = "Idle"
 app.title(f"LinguaForge — {status_text}")
@@ -68,49 +63,7 @@ btn_style = {
 }
 frame_style = {"fg_color": BG_CARD, "corner_radius": 16}
 
-selected_files = []
-file_widgets = []
-selected_widget_index = None
-processing_thread = None
-stop_flag = False
-current_proc = None
-is_processing = False
-
-# === File Handlers ===
-def refresh_file_list():
-    for w in file_widgets:
-        w.destroy()
-    file_widgets.clear()
-    for i, path in enumerate(selected_files):
-        name = os.path.basename(path)
-        display_name = name
-        if config.get("translate_filenames") and config.get("deepl_api_key"):
-            translated = translate_filename(name, config["deepl_api_key"])
-            display_name = f"{name} ➔ {translated}"
-        label = ctk.CTkLabel(file_list_frame, text=display_name, anchor="w", width=580, height=32, text_color=TEXT_COLOR, font=("Segoe UI", 12))
-        label.pack(fill="x", padx=5, pady=2)
-        label.configure(cursor="hand2")
-        file_widgets.append(label)
-
-def browse_files():
-    files = filedialog.askopenfilenames(filetypes=[("Video files", "*.mp4;*.mkv;*.mov")])
-    for f in files:
-        if f not in selected_files:
-            selected_files.append(f)
-    refresh_file_list()
-
-def clear_files():
-    selected_files.clear()
-    refresh_file_list()
-
-def remove_selected():
-    global selected_widget_index
-    if selected_widget_index is not None and 0 <= selected_widget_index < len(selected_files):
-        selected_files.pop(selected_widget_index)
-        selected_widget_index = None
-        refresh_file_list()
-
-# === UI Feedback ===
+# === Callbacks ===
 def update_status(text):
     global status_text
     status_text = text
@@ -131,60 +84,6 @@ def log_to_gui(msg):
     log_output.see("end")
     log_output.configure(state="disabled")
 
-# === Processing Thread ===
-def run_queue():
-    global stop_flag, current_proc, is_processing
-    stop_flag = False
-    is_processing = True
-    for video in selected_files.copy():
-        if stop_flag:
-            update_status("❌ Cancelled")
-            break
-        update_status(f"▶ {os.path.basename(video)}")
-
-        def stop_check(): return stop_flag
-        def subprocess_ref(proc):
-            global current_proc
-            current_proc = proc
-
-        process_file(
-            video_path=video,
-            cleanup=config["audio_cleanup"],
-            api_key=config["deepl_api_key"],
-            status_fn=update_status,
-            progress_fn=update_progress,
-            log_fn=log_to_gui,
-            stop_check=stop_check,
-            proc_ref_callback=subprocess_ref
-        )
-
-        selected_files.remove(video)
-        refresh_file_list()
-
-    is_processing = False
-    update_status("🎉 Done")
-
-def start_processing():
-    global processing_thread
-    if processing_thread and processing_thread.is_alive():
-        return
-    processing_thread = threading.Thread(target=run_queue)
-    processing_thread.start()
-
-def stop_processing():
-    global stop_flag, current_proc, is_processing
-    stop_flag = True
-    if current_proc:
-        try:
-            current_proc.terminate()
-            log_to_gui("⚠️ Subprocess forcibly terminated.")
-        except Exception as e:
-            log_to_gui(f"❌ Failed to terminate subprocess: {e}")
-        current_proc = None
-    is_processing = False
-    update_status("❌ Cancelled")
-    update_progress(0, "Aborted")
-
 # === UI Layout ===
 main_frame = ctk.CTkFrame(app)
 main_frame.pack(padx=20, pady=20, fill="both", expand=True)
@@ -202,12 +101,14 @@ file_list_scroll = ctk.CTkScrollableFrame(file_list_column, fg_color=LIST_BG, wi
 file_list_scroll.pack(fill="both", expand=True)
 file_list_frame = file_list_scroll
 
+file_list_manager = FileListManager(file_list_scroll, config, log_fn=log_to_gui)
+
 button_texts = [
-    ("➕", "Add Files", browse_files),
-    ("➖", "Remove Selected", remove_selected),
-    ("🗑️", "Clear List", clear_files),
-    ("⚙️", "Advanced Processing", lambda: open_advanced_processing(app, config, save_config, is_processing)),
-    ("🔧", "Preferences", lambda: open_preferences_dialog(app, config, save_config, is_processing))
+    ("➕", "Add Files", lambda: browse_files()),
+    ("➖", "Remove Selected", lambda: file_list_manager.remove_selected()),
+    ("🗑️", "Clear List", lambda: file_list_manager.clear()),
+    ("⚙️", "Advanced Processing", lambda: AdvancedProcessingDialog(app, config, save_config, queue_runner.is_running())),
+    ("🔧", "Preferences", lambda: PreferencesDialog(app, config, save_config, queue_runner.is_running()))
 ]
 
 for icon, text, cmd in button_texts:
@@ -216,8 +117,8 @@ for icon, text, cmd in button_texts:
 
 run_controls = ctk.CTkFrame(main_frame, **frame_style)
 run_controls.pack(pady=12, padx=10, anchor="w")
-ctk.CTkButton(run_controls, text="▶ Start", command=start_processing, width=120, **btn_style).pack(side="left", padx=10)
-ctk.CTkButton(run_controls, text="⛔ Stop", command=stop_processing, width=120, **btn_style).pack(side="left", padx=10)
+ctk.CTkButton(run_controls, text="▶ Start", command=lambda: queue_runner.start(), width=120, **btn_style).pack(side="left", padx=10)
+ctk.CTkButton(run_controls, text="⛔ Stop", command=lambda: queue_runner.stop(), width=120, **btn_style).pack(side="left", padx=10)
 
 progress_frame = ctk.CTkFrame(main_frame, **frame_style)
 progress_bar = ctk.CTkProgressBar(progress_frame, height=16, corner_radius=10)
@@ -233,6 +134,21 @@ log_frame.pack(padx=10, pady=(0, 10), fill="both", expand=True)
 log_output = ctk.CTkTextbox(log_frame, height=250, font=("Consolas", 11))
 log_output.pack(fill="both", expand=True, padx=10, pady=10)
 log_output.configure(state="disabled")
+
+def browse_files():
+    files = filedialog.askopenfilenames(filetypes=[("Video files", "*.mp4;*.mkv;*.mov")])
+    if files:
+        file_list_manager.add_files(files)
+
+# === Setup runner ===
+queue_runner = QueueRunner(
+    config=config,
+    file_list_manager=file_list_manager,
+    process_file_fn=process_file,
+    log_fn=log_to_gui,
+    status_fn=update_status,
+    progress_fn=update_progress
+)
 
 update_status("Idle")
 app.mainloop()

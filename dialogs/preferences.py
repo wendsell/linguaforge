@@ -1,43 +1,42 @@
 import customtkinter as ctk
-from tkinter import messagebox
-from ui.tooltip import ToolTip
 
-def open_advanced_processing(app, config, save_config, is_processing):
-    win = ctk.CTkToplevel(app)
-    win.title("Advanced Processing")
-    win.geometry("400x220")
-    win.resizable(False, False)
+class PreferencesDialog:
+    def __init__(self, parent, config, save_config_fn, is_running):
+        self.config = config
+        self.save_config = save_config_fn
+        self.is_running = is_running
 
-    # Center the dialog
-    win.update_idletasks()
-    x = app.winfo_x() + (app.winfo_width() // 2) - (win.winfo_width() // 2)
-    y = app.winfo_y() + (app.winfo_height() // 2) - (win.winfo_height() // 2)
-    win.geometry(f"+{x}+{y}")
+        self.win = ctk.CTkToplevel(parent)
+        self.win.title("Preferences")
+        self.win.geometry("400x240")
+        self.win.transient(parent)
+        self.win.grab_set()
 
-    # Config vars
-    audio_var = ctk.BooleanVar(value=config.get("audio_cleanup", True))
-    translate_var = ctk.BooleanVar(value=config.get("translate_filenames", False))
+        ctk.CTkLabel(self.win, text="DeepL API Key:").pack(pady=(20, 5))
+        self.api_entry = ctk.CTkEntry(self.win, width=300)
+        self.api_entry.insert(0, self.config.get("deepl_api_key", ""))
+        self.api_entry.pack()
 
-    # Audio cleanup
-    audio_check = ctk.CTkCheckBox(win, text="Enable Audio Cleanup", variable=audio_var)
-    audio_check.pack(pady=(25, 10))
-    ToolTip(win, audio_check, "Normalizes and denoises the audio track using FFmpeg.")
+        ctk.CTkLabel(self.win, text="Theme:").pack(pady=(20, 5))
+        self.theme_option = ctk.CTkOptionMenu(
+            self.win,
+            values=["Light", "Dark"],
+            command=self.change_theme
+        )
+        self.theme_option.set(self.config.get("theme", "Light"))
+        self.theme_option.pack()
 
-    # Filename translation
-    translate_check = ctk.CTkCheckBox(win, text="Translate Filenames", variable=translate_var)
-    translate_check.pack(pady=5)
-    ToolTip(win, translate_check, "Uses DeepL API to rename files automatically.")
+        ctk.CTkButton(self.win, text="Save", command=self.save).pack(pady=20)
 
-    def save():
-        if is_processing:
-            messagebox.showwarning("Busy", "Please wait for the current job to finish.")
+    def save(self):
+        self.config["deepl_api_key"] = self.api_entry.get()
+        self.save_config(self.config)
+        self.win.destroy()
+
+    def change_theme(self, new_theme):
+        if self.is_running():
+            ctk.CTkLabel(self.win, text="⚠️ Can't change theme while running!", text_color="red").pack()
             return
-
-        config["audio_cleanup"] = audio_var.get()
-        config["translate_filenames"] = translate_var.get()
-        save_config(config)
-        win.destroy()
-
-    save_button = ctk.CTkButton(win, text="Save", command=save, width=160)
-    save_button.pack(pady=20)
-    ToolTip(win, save_button, "Apply changes for future processing.")
+        ctk.set_appearance_mode(new_theme)
+        self.config["theme"] = new_theme
+        self.save_config(self.config)

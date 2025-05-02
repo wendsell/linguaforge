@@ -1,39 +1,40 @@
 import customtkinter as ctk
-from ui.tooltip import ToolTip
 
-def open_advanced_processing(app, config, save_config):
-    win = ctk.CTkToplevel(app)
-    win.title("Advanced Processing")
-    win.geometry("400x200")
-    win.resizable(False, False)
+class AdvancedProcessingDialog:
+    def __init__(self, parent, config, save_config_fn, is_running):
+        self.config = config
+        self.save_config = save_config_fn
+        self.is_running = is_running
 
-    # 💡 Center the dialog over the main app window
-    win.update_idletasks()
-    x = app.winfo_x() + (app.winfo_width() // 2) - (win.winfo_width() // 2)
-    y = app.winfo_y() + (app.winfo_height() // 2) - (win.winfo_height() // 2)
-    win.geometry(f"+{x}+{y}")
+        self.win = ctk.CTkToplevel(parent)
+        self.win.title("Advanced Processing")
+        self.win.geometry("400x200")
+        self.win.transient(parent)
+        self.win.grab_set()
 
-    # Checkbox variables
-    audio_var = ctk.BooleanVar(value=config.get("audio_cleanup", True))
-    translate_var = ctk.BooleanVar(value=config.get("translate_filenames", False))
+        self.cleanup_var = ctk.BooleanVar(value=self.config.get("audio_cleanup", True))
+        self.translate_var = ctk.BooleanVar(value=self.config.get("translate_filenames", False))
 
-    # Audio cleanup checkbox
-    audio_check = ctk.CTkCheckBox(win, text="Enable Audio Cleanup", variable=audio_var)
-    audio_check.pack(pady=(20, 10))
-    ToolTip(win, audio_check, "Applies loudness normalization and denoising.")
+        cleanup_cb = ctk.CTkCheckBox(
+            self.win,
+            text="Enable Audio Cleanup",
+            variable=self.cleanup_var,
+            command=self.toggle_audio_cleanup
+        )
+        cleanup_cb.pack(pady=(30, 10))
 
-    # Filename translation checkbox
-    translate_check = ctk.CTkCheckBox(win, text="Translate Filenames to English", variable=translate_var)
-    translate_check.pack(pady=(0, 20))
-    ToolTip(win, translate_check, "Uses DeepL to rename files when needed.")
+        translate_cb = ctk.CTkCheckBox(
+            self.win,
+            text="Translate Filenames",
+            variable=self.translate_var,
+            command=self.toggle_translate_filenames
+        )
+        translate_cb.pack(pady=10)
 
-    # Save button
-    def save():
-        config["audio_cleanup"] = audio_var.get()
-        config["translate_filenames"] = translate_var.get()
-        save_config(config)
-        win.destroy()
+    def toggle_audio_cleanup(self):
+        self.config["audio_cleanup"] = self.cleanup_var.get()
+        self.save_config(self.config)
 
-    save_button = ctk.CTkButton(win, text="Save", command=save, width=140)
-    save_button.pack()
-    ToolTip(win, save_button, "Save changes to advanced settings.")
+    def toggle_translate_filenames(self):
+        self.config["translate_filenames"] = self.translate_var.get()
+        self.save_config(self.config)
