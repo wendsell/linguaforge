@@ -2,6 +2,7 @@ import customtkinter as ctk
 import os
 import json
 from tkinter import filedialog
+from tkinterdnd2 import DND_FILES, TkinterDnD
 
 from engine.processor import process_file
 from engine.logger import open_log
@@ -17,7 +18,9 @@ DEFAULT_CONFIG = {
     "translate_filenames": False,
     "theme": "Light",
     "window_width": 920,
-    "window_height": 820
+    "window_height": 820,
+    "move_processed_to_archive": False,
+    "delete_original_after_process": False
 }
 
 def load_config():
@@ -38,7 +41,12 @@ for key in DEFAULT_CONFIG:
 ctk.set_appearance_mode(config["theme"])
 ctk.set_default_color_theme("blue")
 
-app = ctk.CTk()
+class DnDApp(TkinterDnD.Tk, ctk.CTk):
+    def __init__(self):
+        TkinterDnD.Tk.__init__(self)
+        ctk.CTk.__init__(self)
+
+app = DnDApp()
 app.geometry(f"{config['window_width']}x{config['window_height']}")
 app.resizable(False, False)
 status_text = "Idle"
@@ -84,6 +92,13 @@ def log_to_gui(msg):
     log_output.see("end")
     log_output.configure(state="disabled")
 
+def update_eta(seconds_left):
+    if seconds_left is None:
+        eta_label.configure(text="")
+    else:
+        m, s = divmod(seconds_left, 60)
+        eta_label.configure(text=f"ETA: {m:.0f}m {s:.0f}s")
+
 # === UI Layout ===
 main_frame = ctk.CTkFrame(app)
 main_frame.pack(padx=20, pady=20, fill="both", expand=True)
@@ -103,8 +118,28 @@ file_list_frame = file_list_scroll
 
 file_list_manager = FileListManager(file_list_scroll, config, log_fn=log_to_gui)
 
+# === Drag and drop
+def on_drop(event):
+    files = app.tk.splitlist(event.data)
+    video_files = [f for f in files if f.lower().endswith(('.mp4', '.mkv', '.mov'))]
+    if video_files:
+        file_list_manager.add_files(video_files)
+
+app.drop_target_register(DND_FILES)
+app.dnd_bind('<<Drop>>', on_drop)
+
+def folder_import():
+    folder = filedialog.askdirectory()
+    if not folder:
+        return
+    files = [os.path.join(folder, f) for f in os.listdir(folder)
+             if f.lower().endswith(('.mp4', '.mkv', '.mov'))]
+    if files:
+        file_list_manager.add_files(files)
+
 button_texts = [
     ("➕", "Add Files", lambda: browse_files()),
+    ("📁", "Import Folder", folder_import),
     ("➖", "Remove Selected", lambda: file_list_manager.remove_selected()),
     ("🗑️", "Clear List", lambda: file_list_manager.clear()),
     ("⚙️", "Advanced Processing", lambda: AdvancedProcessingDialog(app, config, save_config, queue_runner.is_running())),
@@ -126,6 +161,8 @@ progress_bar.pack(fill="x", pady=(10, 5), padx=10)
 progress_bar.set(0)
 progress_label = ctk.CTkLabel(progress_frame, text="0%", font=("Segoe UI", 12))
 progress_label.pack()
+eta_label = ctk.CTkLabel(progress_frame, text="", font=("Segoe UI", 12, "italic"))
+eta_label.pack()
 status_label = ctk.CTkLabel(progress_frame, text="Idle", font=("Segoe UI", 13, "bold"))
 status_label.pack(pady=(2, 10))
 
@@ -140,14 +177,14 @@ def browse_files():
     if files:
         file_list_manager.add_files(files)
 
-# === Setup runner ===
 queue_runner = QueueRunner(
     config=config,
     file_list_manager=file_list_manager,
     process_file_fn=process_file,
     log_fn=log_to_gui,
     status_fn=update_status,
-    progress_fn=update_progress
+    progress_fn=update_progress,
+    eta_fn=update_eta
 )
 
 update_status("Idle")
