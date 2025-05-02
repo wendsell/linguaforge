@@ -11,7 +11,10 @@ CONFIG_FILE = "config.json"
 DEFAULT_CONFIG = {
     "deepl_api_key": "",
     "audio_cleanup": True,
-    "translate_filenames": False
+    "translate_filenames": False,
+    "theme": "Light",
+    "window_width": 920,
+    "window_height": 820
 }
 
 def load_config():
@@ -26,13 +29,38 @@ def save_config(cfg):
 
 config = load_config()
 
-ctk.set_appearance_mode("Light")
+# Ensure all expected config keys exist
+for key in DEFAULT_CONFIG:
+    if key not in config:
+        config[key] = DEFAULT_CONFIG[key]
+
+# Apply theme and window size
+ctk.set_appearance_mode(config["theme"])
+app_width = config.get("window_width", 920)
+app_height = config.get("window_height", 820)
+
 ctk.set_default_color_theme("blue")
 
 app = ctk.CTk()
 app.title("LinguaForge")
-app.geometry("920x820")
+app.geometry(f"{app_width}x{app_height}")
 app.resizable(False, False)
+
+# === LANG FLAG ===
+def get_flag_emoji(lang_code):
+    flags = {
+        "en": ("🇺🇸", "English"),
+        "de": ("🇩🇪", "German"),
+        "fr": ("🇫🇷", "French"),
+        "es": ("🇪🇸", "Spanish"),
+        "it": ("🇮🇹", "Italian"),
+        "pt": ("🇵🇹", "Portuguese"),
+        "ja": ("🇯🇵", "Japanese"),
+        "ko": ("🇰🇷", "Korean"),
+        "zh": ("🇨🇳", "Chinese"),
+        "ru": ("🇷🇺", "Russian")
+    }
+    return flags.get(lang_code[:2], ("🏳️", "Unknown"))
 
 selected_files = []
 file_widgets = []
@@ -50,12 +78,24 @@ LIST_BG = "#f7f9fb"
 LOG_BG = "#f1f5f9"
 TEXT_COLOR = "#1f2937"
 
-btn_style = {"fg_color": BTN_COLOR, "hover_color": BTN_HOVER, "corner_radius": 6, "text_color": "white"}
+btn_style = {
+    "fg_color": BTN_COLOR,
+    "hover_color": BTN_HOVER,
+    "corner_radius": 10,
+    "text_color": "white",
+    "font": ("Segoe UI Semibold", 13)
+}
 frame_style = {"fg_color": BG_CARD, "corner_radius": 10}
 
 # === DIALOGS ===
 def open_audio_options():
     win = ctk.CTkToplevel(app)
+    win.transient(app)
+    win.grab_set()
+    win.update_idletasks()
+    x = app.winfo_x() + 100
+    y = app.winfo_y() + 100
+    win.geometry(f"350x150+{x}+{y}")
     win.title("Advanced Processing")
     win.geometry("350x150")
     win.resizable(False, False)
@@ -66,6 +106,12 @@ def open_audio_options():
 
 def open_preferences():
     win = ctk.CTkToplevel(app)
+    win.transient(app)
+    win.grab_set()
+    win.update_idletasks()
+    x = app.winfo_x() + 120
+    y = app.winfo_y() + 120
+    win.geometry(f"400x200+{x}+{y}")
     win.title("Preferences")
     win.geometry("400x200")
     win.resizable(False, False)
@@ -127,6 +173,11 @@ def remove_selected():
 
 # === PROCESSING ===
 def update_status(text):
+    if "Detected language:" in text:
+        parts = text.split(":")
+        lang = parts[-1].strip().lower()
+        flag, langname = get_flag_emoji(lang)
+        language_flag_label.configure(text=f"{flag} {langname}")
     status_label.configure(text=text)
 
 def update_progress(percent, step=""):
@@ -148,6 +199,9 @@ def run_queue():
     for video in selected_files.copy():
         if stop_flag:
             update_status("❌ Cancelled")
+            progress_bar.set(0)
+            progress_label.configure(text="Aborted")
+            status_label.configure(text="❌ Aborted")
             break
         update_status(f"▶ {os.path.basename(video)}")
 
@@ -167,7 +221,8 @@ def run_queue():
 
         selected_files.remove(video)
         refresh_file_list()
-    progress_bar.stop()
+    progress_bar.set(0)
+    progress_label.configure(text="0%")
     update_status("🎉 Done")
 
 def start_processing():
@@ -195,16 +250,13 @@ def toggle_translate_filenames():
     config["translate_filenames"] = translate_checkbox.get()
     save_config(config)
 
-def save_api_key():
-    config["deepl_api_key"] = api_entry.get()
-    save_config(config)
-    api_entry.configure(show="*")
+
 
 # === UI LAYOUT ===
-main_frame = ctk.CTkFrame(app, **frame_style)
+main_frame = ctk.CTkFrame(app, fg_color="#f9fafb")
 main_frame.pack(padx=20, pady=20, fill="both", expand=True)
 
-file_section = ctk.CTkFrame(main_frame, fg_color=LIST_BG, corner_radius=12)
+file_section = ctk.CTkFrame(main_frame, fg_color=LIST_BG, corner_radius=16)
 file_section.pack(fill="x", pady=10, padx=10)
 
 file_list_column = ctk.CTkFrame(file_section, fg_color=LIST_BG, corner_radius=12)
@@ -217,44 +269,40 @@ file_list_scroll = ctk.CTkScrollableFrame(file_list_column, fg_color=LIST_BG, wi
 file_list_scroll.pack(fill="both", expand=True)
 file_list_frame = file_list_scroll
 
-ctk.CTkButton(file_controls_column, text="Add Files", command=browse_files, **btn_style).pack(fill="x", padx=10, pady=5)
-ctk.CTkButton(file_controls_column, text="Remove Selected", command=remove_selected, **btn_style).pack(fill="x", padx=10, pady=5)
-ctk.CTkButton(file_controls_column, text="Clear List", command=clear_files, **btn_style).pack(fill="x", padx=10, pady=5)
-ctk.CTkButton(file_controls_column, text="Advanced Processing", command=open_audio_options, **btn_style).pack(fill="x", padx=10, pady=5)
-ctk.CTkButton(file_controls_column, text="Preferences", command=open_preferences, **btn_style).pack(fill="x", padx=10, pady=5)
+ctk.CTkButton(file_controls_column, text="📂 Add Files", command=browse_files, **btn_style).pack(fill="x", padx=10, pady=5)
+ctk.CTkButton(file_controls_column, text="🗑 Remove Selected", command=remove_selected, **btn_style).pack(fill="x", padx=10, pady=5)
+ctk.CTkButton(file_controls_column, text="❌ Clear List", command=clear_files, **btn_style).pack(fill="x", padx=10, pady=5)
+ctk.CTkButton(file_controls_column, text="⚙️ Advanced Processing", command=open_audio_options, **btn_style).pack(fill="x", padx=10, pady=5)
+ctk.CTkButton(file_controls_column, text="🔧 Preferences", command=open_preferences, **btn_style).pack(fill="x", padx=10, pady=5)
 
-run_controls = ctk.CTkFrame(main_frame, **frame_style)
+run_controls = ctk.CTkFrame(main_frame, fg_color="#e2e8f0", corner_radius=16)
 run_controls.pack(pady=10, padx=10)
 ctk.CTkButton(run_controls, text="▶ Start", command=start_processing, width=120, **btn_style).pack(side="left", padx=10)
 ctk.CTkButton(run_controls, text="⛔ Stop", command=stop_processing, width=120, **btn_style).pack(side="left", padx=10)
 
-progress_frame = ctk.CTkFrame(main_frame, **frame_style)
+progress_frame = ctk.CTkFrame(main_frame, fg_color="#f1f5f9", corner_radius=16)
 progress_frame.pack(fill="x", padx=10, pady=(5, 10))
 progress_bar = ctk.CTkProgressBar(progress_frame, height=20, mode="determinate")
-progress_bar.configure(progress_color="#60a5fa")  # soft animated blue
 progress_bar.set(0)
 progress_bar.pack(fill="x", pady=(10, 5), padx=10)
-# progress_bar.start()  # Removed idle animation
-progress_label = ctk.CTkLabel(progress_frame, text="0%")
+
+
+
+
+
+progress_label = ctk.CTkLabel(progress_frame, text="0%", font=("Segoe UI", 14))
+
+# Flag display for detected language
+language_flag_label = ctk.CTkLabel(progress_frame, text="", font=("Segoe UI", 18), text_color="#4b5563")
+language_flag_label.pack(pady=(5, 5))
 progress_label.pack()
 status_label = ctk.CTkLabel(progress_frame, text="Idle", font=("Segoe UI", 14))
 status_label.pack(pady=(2, 10))
 
-settings_frame = ctk.CTkFrame(main_frame, **frame_style)
-settings_frame.pack(pady=10, padx=10, fill="x")
-cleanup_checkbox = ctk.CTkCheckBox(settings_frame, text="Enable Audio Cleanup", command=toggle_audio_cleanup)
-cleanup_checkbox.pack(side="left", padx=5)
-cleanup_checkbox.select() if config["audio_cleanup"] else cleanup_checkbox.deselect()
-translate_checkbox = ctk.CTkCheckBox(settings_frame, text="Translate Filenames", command=toggle_translate_filenames)
-translate_checkbox.pack(side="left", padx=5)
-translate_checkbox.select() if config.get("translate_filenames") else translate_checkbox.deselect()
-api_entry = ctk.CTkEntry(settings_frame, placeholder_text="DeepL API Key", width=300)
-api_entry.insert(0, config["deepl_api_key"])
-api_entry.pack(side="left", padx=10)
-if config["deepl_api_key"]: api_entry.configure(show="*")
-ctk.CTkButton(settings_frame, text="Save", command=save_api_key, width=80, **btn_style).pack(side="left", padx=5)
 
-log_frame = ctk.CTkFrame(main_frame, fg_color=LOG_BG, corner_radius=12)
+
+
+log_frame = ctk.CTkFrame(main_frame, fg_color="#e5e7eb", corner_radius=16)
 log_frame.pack(padx=10, pady=(0, 10), fill="both", expand=True)
 log_output = ctk.CTkTextbox(log_frame, height=250)
 log_output.pack(fill="both", expand=True, padx=10, pady=10)
