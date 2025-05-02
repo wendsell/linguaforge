@@ -1,70 +1,88 @@
 import os
+import time
 import threading
 
 class QueueRunner:
-    def __init__(self, config, file_list_manager, process_file_fn, log_fn=None, status_fn=None, progress_fn=None):
+    def __init__(self, config, file_list_manager, processor_fn, logger_fn, status_fn, progress_fn, eta_fn):
         self.config = config
-        self.file_list_manager = file_list_manager
-        self.process_file = process_file_fn
-
-        self.log = log_fn or (lambda msg: None)
-        self.set_status = status_fn or (lambda msg: None)
-        self.set_progress = progress_fn or (lambda pct, msg="": None)
-
-        self.processing_thread = None
+        self.file_list = file_list_manager
+        self.processor = processor_fn
+        self.logger = logger_fn
+        self.status = status_fn
+        self.progress = progress_fn
+        self.eta = eta_fn
+        self.thread = None
         self.stop_flag = False
         self.current_proc = None
 
     def is_running(self):
-        return self.processing_thread and self.processing_thread.is_alive()
+        return self.thread and self.thread.is_alive()
 
     def start(self):
         if self.is_running():
             return
-        self.stop_flag = False
-        self.processing_thread = threading.Thread(target=self._run_queue)
-        self.processing_thread.start()
+        self.thread = threading.Thread(target=self._run)
+        self.thread.start()
 
     def stop(self):
         self.stop_flag = True
         if self.current_proc:
             try:
                 self.current_proc.terminate()
-                self.log("⚠️ Subprocess forcibly terminated.")
+                self.logger("⛔ Subprocess terminated")
             except Exception as e:
-                self.log(f"❌ Failed to terminate subprocess: {e}")
-            self.current_proc = None
-        self.set_status("❌ Cancelled")
-        self.set_progress(0, "Aborted")
+                self.logger(f"❌ Failed to terminate: {e}")
+        self.current_proc = None
 
-    def _run_queue(self):
-        while self.file_list_manager.selected_files:
-            video = self.file_list_manager.selected_files[0]
-            if self.stop_flag:
-                self.set_status("❌ Cancelled")
+    def _run(self):
+        self.stop_flag = False
+        while not self.stop_flag:
+            video = self.file_list.pop_next()
+            if not video:
                 break
-
-            self.set_status(f"▶ {os.path.basename(video)}")
+            self.status(f"▶ {os.path.basename(video)}")
 
             def stop_check():
                 return self.stop_flag
 
-            def proc_ref(p):
+            def subprocess_ref(p):
                 self.current_proc = p
 
-            self.process_file(
+            start_time = time.time()
+
+            self.processor(
                 video_path=video,
-                cleanup=self.config.get("audio_cleanup", True),
-                api_key=self.config.get("deepl_api_key", ""),
-                status_fn=self.set_status,
-                progress_fn=self.set_progress,
-                log_fn=self.log,
+                cleanup=self.config["audio_cleanup"],
+                api_key=self.config["deepl_api_key"],
+                status_fn=self.status,
+                progress_fn=self.progress,
+                log_fn=self.logger,
                 stop_check=stop_check,
-                proc_ref_callback=proc_ref
+                proc_ref_callback=subprocess_ref
             )
 
-            self.file_list_manager.selected_files.pop(0)
-            self.file_list_manager.refresh()
+            elapsed = time.time() - start_time
+            self.eta(None)
 
-        if not self.stop_flag:
-            self.set_status("🎉 Done")
+            if self.stop_flag:
+                self.status("❌ Cancelled")
+                self.progress(0, "Aborted")
+                return
+
+            # Post-job cleanup
+            if self.config.get("move_processed_to_archive"):
+                try:
+                    os.makedirs("archive", exist_ok=True)
+                    base = os.path.basename(video)
+                    os.rename(video, os.path.join("archive", base))
+                    self.logger(f"📦 Archived: {base}")
+                except Exception as e:
+                    self.logger(f"⚠️ Archive failed: {e}")
+            elif self.config.get("delete_original_after_process"):
+                try:
+                    os.remove(video)
+                    self.logger(f"🗑️ Deleted: {os.path.basename(video)}")
+                except Exception as e:
+                    self.logger(f"⚠️ Delete failed: {e}")
+
+        self.status("🎉 Done")
