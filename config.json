@@ -1,4 +1,8 @@
 {
   "deepl_api_key": "",
-  "audio_cleanup": 1
+  "audio_cleanup": 1,
+  "translate_filenames": false,
+  "theme": "Light",
+  "window_width": 920,
+  "window_height": 820
 }

@@ -6,6 +6,8 @@ from tkinter import filedialog
 from engine.processor import process_file
 from engine.logger import open_log
 from engine.deepl_translate import translate_filename
+from dialogs.preferences import open_preferences_dialog
+from dialogs.advanced import open_advanced_processing
 
 CONFIG_FILE = "config.json"
 DEFAULT_CONFIG = {
@@ -72,6 +74,7 @@ selected_widget_index = None
 processing_thread = None
 stop_flag = False
 current_proc = None
+is_processing = False
 
 # === File Handlers ===
 def refresh_file_list():
@@ -130,8 +133,9 @@ def log_to_gui(msg):
 
 # === Processing Thread ===
 def run_queue():
-    global stop_flag, current_proc
+    global stop_flag, current_proc, is_processing
     stop_flag = False
+    is_processing = True
     for video in selected_files.copy():
         if stop_flag:
             update_status("❌ Cancelled")
@@ -156,6 +160,8 @@ def run_queue():
 
         selected_files.remove(video)
         refresh_file_list()
+
+    is_processing = False
     update_status("🎉 Done")
 
 def start_processing():
@@ -166,7 +172,7 @@ def start_processing():
     processing_thread.start()
 
 def stop_processing():
-    global stop_flag, current_proc
+    global stop_flag, current_proc, is_processing
     stop_flag = True
     if current_proc:
         try:
@@ -175,6 +181,7 @@ def stop_processing():
         except Exception as e:
             log_to_gui(f"❌ Failed to terminate subprocess: {e}")
         current_proc = None
+    is_processing = False
     update_status("❌ Cancelled")
     update_progress(0, "Aborted")
 
@@ -199,8 +206,8 @@ button_texts = [
     ("➕", "Add Files", browse_files),
     ("➖", "Remove Selected", remove_selected),
     ("🗑️", "Clear List", clear_files),
-    ("⚙️", "Advanced Processing", lambda: print("Audio options")),
-    ("🔧", "Preferences", lambda: print("Preferences"))
+    ("⚙️", "Advanced Processing", lambda: open_advanced_processing(app, config, save_config, is_processing)),
+    ("🔧", "Preferences", lambda: open_preferences_dialog(app, config, save_config, is_processing))
 ]
 
 for icon, text, cmd in button_texts:
@@ -228,5 +235,4 @@ log_output.pack(fill="both", expand=True, padx=10, pady=10)
 log_output.configure(state="disabled")
 
 update_status("Idle")
-
 app.mainloop()
